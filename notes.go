@@ -7,6 +7,8 @@ type Note struct {
 	MIDI      int8
 }
 
+var noteDuration = []float64{2.0, 1.0, 0.5, 0.25, 0.125, 0.0625, 0.03125, 0.015625, 0.0078125}
+
 var notes = map[string]Note{
 	"A0":  {Id: "A0", Key: 1, Frequency: 27.50000, MIDI: 21},
 	"A#0": {Id: "A#0", Key: 2, Frequency: 29.13524, MIDI: 22},

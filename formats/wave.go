@@ -235,3 +235,19 @@ func check(e error) {
 		panic(e)
 	}
 }
+
+func GetChunkSize(subChunk2Size int) uint32 {
+	return uint32(36 + subChunk2Size)
+}
+
+func GetByteRate(sampleRate uint32, numChannels uint32, bitsPerSample uint32) uint32 {
+	return (sampleRate * numChannels * bitsPerSample) / 8
+}
+
+func GetBlockAlign(numChannels uint32, bitsPerSample uint32) uint32 {
+	return (numChannels * bitsPerSample) / 8
+}
+
+func GetSubChunk2Size(numSamples uint32, numChannels uint32, bitsPerSample uint32) uint32 {
+	return (numSamples * numChannels * bitsPerSample) / 8
+}

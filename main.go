@@ -3,16 +3,17 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 
 	"github.com/JosephAMumford/audio-generator/formats"
 )
 
-
+const (
+	SECONDS_PER_MINUTE = 60.0
+)
 
 func main() {
 	//readWavFileData("sine.wav")
-	createWavFile("exports/sine.wav", "sine")
+	createWavFile("exports/square.wav", "square")
 }
 
 func readWavFileData(filename string) {
@@ -26,22 +27,21 @@ func createWavFile(filename string, toneType string) {
 	numberOfChannels := 1
 	sampleRate := 44100
 	bitsPerSample := 16
-	seconds := 4
 
-	audioData := generateAudio(uint32(sampleRate), uint32(bitsPerSample), uint32(seconds), toneType)
+	audioData := generateAudio(uint32(sampleRate), toneType)
 
-	//Create wavfile
+	//Create wav file
 	newWav := formats.WAVE{
 		ChunkID:       formats.CHUNK_ID,
-		ChunkSize:     getChunkSize(len(audioData)),
+		ChunkSize:     formats.GetChunkSize(len(audioData)),
 		Format:        formats.FORMAT,
 		Subchunk1ID:   formats.SUBCHUNK1ID,
 		Subchunk1Size: formats.SUBCHUNK1SIZE,
 		AudioFormat:   formats.PCM,
 		NumChannels:   uint16(numberOfChannels),
 		SampleRate:    uint32(sampleRate),
-		ByteRate:      getByteRate(uint32(sampleRate), uint32(numberOfChannels), uint32(bitsPerSample)),
-		BlockAlign:    uint16(getBlockAlign(uint32(numberOfChannels), uint32(bitsPerSample))),
+		ByteRate:      formats.GetByteRate(uint32(sampleRate), uint32(numberOfChannels), uint32(bitsPerSample)),
+		BlockAlign:    uint16(formats.GetBlockAlign(uint32(numberOfChannels), uint32(bitsPerSample))),
 		BitsPerSample: uint16(bitsPerSample),
 		Subchunk2ID:   formats.SUBCHUNK2ID,
 		Subchunk2Size: uint32(len(audioData)),
@@ -51,71 +51,43 @@ func createWavFile(filename string, toneType string) {
 	newWav.SaveFile(filename)
 }
 
-func generateAudio(sampleRate uint32, bitsPerSample uint32, seconds uint32, toneType string) []byte {
+func generateAudio(sampleRate uint32, toneType string) []byte {
 	fmt.Println("Generating audio")
 	var data []byte
 
-	bitDepth := math.Pow(2, float64(bitsPerSample)) - 1
-	fmt.Printf("Audio bit depth: %f\n", bitDepth)
+	track := Track{Tempo: 120, NoteList: []TrackValue{
+		{Note: "F4", Duration: 3},
+		{Note: "A4", Duration: 3},
+		{Note: "C5", Duration: 2},
+		{Note: "F4", Duration: 3},
+		{Note: "A4", Duration: 3},
+		{Note: "D5", Duration: 2},
+	}}
 
-	//amp := 10.0
-	//freq := 440.0
+	bps := float64(track.Tempo)/SECONDS_PER_MINUTE
 
-	freq :=  notes["F4"].Frequency
-	
-	for i := 0; i < int(sampleRate)*int(seconds); i++ {
-		var sample float64
-		switch toneType {
-		case "saw":
-			sample = getSawSample(float64(i), float64(sampleRate), freq)
-		case "square":
-			sample = getSquareSample(float64(i), float64(sampleRate), freq)
-		default:
-			sample = getSineSample(float64(i), float64(sampleRate), freq)
+	for i := 0; i < len(track.NoteList); i++ {
+		value := track.NoteList[i]
+		note := notes[value.Note]
+
+		duration := float64(sampleRate) * (bps * noteDuration[value.Duration])
+
+		for s := 0; s < int(duration); s++ {
+			var sample float64
+			switch toneType {
+			case "saw":
+				sample = getSawSample(float64(s), float64(sampleRate), note.Frequency)
+			case "square":
+				sample = getSquareSample(float64(s), float64(sampleRate), note.Frequency)
+			default:
+				sample = getSineSample(float64(s), float64(sampleRate), note.Frequency)
+			}
+
+			b := make([]byte, 2)
+			binary.LittleEndian.PutUint16(b, uint16(sample))
+			data = append(data, b...)
 		}
-
-		b := make([]byte, 2)
-		binary.LittleEndian.PutUint16(b, uint16(sample))
-		data = append(data, b...)
 	}
 
 	return data
-}
-
-func getSineSample(t float64, sampleRate float64, frequency float64) float64 {
-	return math.Sin(2*math.Pi*t/(sampleRate/frequency)) * 32767
-}
-
-func getSawSample(t float64, sampleRate float64, frequency float64) float64 {
-	return ((2*math.Mod(t, (sampleRate/frequency))/(sampleRate/frequency) - 1) * 32767)
-}
-
-func getSquareSample(t float64, sampleRate float64, frequency float64) float64 {
-	val := math.Sin(2*math.Pi*t/(sampleRate/frequency)) * 32767
-	if val > 0.0 {
-		val = 32767
-	}
-	if val < 0.0 {
-		val = 0
-	}
-
-	return val
-}
-
-
-
-func getChunkSize(subChunk2Size int) uint32 {
-	return uint32(36 + subChunk2Size)
-}
-
-func getByteRate(sampleRate uint32, numChannels uint32, bitsPerSample uint32) uint32 {
-	return (sampleRate * numChannels * bitsPerSample) / 8
-}
-
-func getBlockAlign(numChannels uint32, bitsPerSample uint32) uint32 {
-	return (numChannels * bitsPerSample) / 8
-}
-
-func getSubChunk2Size(numSamples uint32, numChannels uint32, bitsPerSample uint32) uint32 {
-	return (numSamples * numChannels * bitsPerSample) / 8
 }
