@@ -4,8 +4,8 @@ import (
 	"math"
 )
 
-func getSineSample(t float64, sampleRate float64, frequency float64) float64 {
-	return math.Sin(2*math.Pi*t/(sampleRate/frequency)) * 32767
+func getSineSample(t float64, sampleRate float64, frequency float64, scale float64) float64 {
+	return scale * math.Sin(2*math.Pi*t/(sampleRate/frequency)) * 32767
 }
 
 func getSawSample(t float64, sampleRate float64, frequency float64) float64 {

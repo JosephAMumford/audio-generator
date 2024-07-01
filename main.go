@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 
 	"github.com/JosephAMumford/audio-generator/formats"
 )
@@ -13,7 +14,7 @@ const (
 
 func main() {
 	//readWavFileData("sine.wav")
-	createWavFile("exports/square.wav", "square")
+	createWavFile("exports/sine.wav", "sine")
 }
 
 func readWavFileData(filename string) {
@@ -24,11 +25,11 @@ func readWavFileData(filename string) {
 
 func createWavFile(filename string, toneType string) {
 	//Generate Data
-	numberOfChannels := 1
+	numberOfChannels := 2
 	sampleRate := 44100
 	bitsPerSample := 16
 
-	audioData := generateAudio(uint32(sampleRate), toneType)
+	audioData := generateAudio(uint32(sampleRate), toneType, int16(numberOfChannels))
 
 	//Create wav file
 	newWav := formats.WAVE{
@@ -51,26 +52,28 @@ func createWavFile(filename string, toneType string) {
 	newWav.SaveFile(filename)
 }
 
-func generateAudio(sampleRate uint32, toneType string) []byte {
+func generateAudio(sampleRate uint32, toneType string, numChannels int16) []byte {
 	fmt.Println("Generating audio")
 	var data []byte
 
 	track := Track{Tempo: 120, NoteList: []TrackValue{
-		{Note: "F4", Duration: 3},
-		{Note: "A4", Duration: 3},
-		{Note: "C5", Duration: 2},
-		{Note: "F4", Duration: 3},
-		{Note: "A4", Duration: 3},
-		{Note: "D5", Duration: 2},
+		{Note: "F4", Duration: 3, Velocity: 5},
+		{Note: "A4", Duration: 3, Velocity: 4},
+		{Note: "C5", Duration: 2, Velocity: 3},
+		{Note: "F4", Duration: 3, Velocity: 5},
+		{Note: "A4", Duration: 3, Velocity: 6},
+		{Note: "D5", Duration: 2, Velocity: 7},
 	}}
 
-	bps := float64(track.Tempo)/SECONDS_PER_MINUTE
+	bps := float64(track.Tempo) / SECONDS_PER_MINUTE
 
 	for i := 0; i < len(track.NoteList); i++ {
 		value := track.NoteList[i]
 		note := notes[value.Note]
 
 		duration := float64(sampleRate) * (bps * noteDuration[value.Duration])
+
+		desired_scale := getDecibelScale(noteVelocity[value.Velocity])
 
 		for s := 0; s < int(duration); s++ {
 			var sample float64
@@ -80,14 +83,28 @@ func generateAudio(sampleRate uint32, toneType string) []byte {
 			case "square":
 				sample = getSquareSample(float64(s), float64(sampleRate), note.Frequency)
 			default:
-				sample = getSineSample(float64(s), float64(sampleRate), note.Frequency)
+				sample = getSineSample(float64(s), float64(sampleRate), note.Frequency, desired_scale)
 			}
 
-			b := make([]byte, 2)
-			binary.LittleEndian.PutUint16(b, uint16(sample))
-			data = append(data, b...)
+			if numChannels == 1 {
+				b := make([]byte, 2)
+				binary.LittleEndian.PutUint16(b, uint16(sample))
+				data = append(data, b...)
+			}
+
+			if numChannels == 2 {
+				b := make([]byte, 2)
+				binary.LittleEndian.PutUint16(b, uint16(sample))
+				data = append(data, b...)
+				data = append(data, b...)
+			}
+			
 		}
 	}
 
 	return data
+}
+
+func getDecibelScale(db float64) float64 {
+	return math.Pow(10.0, db/20.0)
 }
