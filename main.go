@@ -4,7 +4,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"math/rand"
 
+	fastnoise "github.com/Auburn/FastNoiseLite/Go"
 	"github.com/JosephAMumford/audio-generator/formats"
 )
 
@@ -14,7 +16,7 @@ const (
 
 func main() {
 	//readWavFileData("sine.wav")
-	createWavFile("exports/sine.wav", "sine")
+	createWavFile("exports/square1.wav")
 }
 
 func readWavFileData(filename string) {
@@ -23,13 +25,13 @@ func readWavFileData(filename string) {
 	wavFile.Print()
 }
 
-func createWavFile(filename string, toneType string) {
+func createWavFile(filename string) {
 	//Generate Data
 	numberOfChannels := 2
 	sampleRate := 44100
 	bitsPerSample := 16
 
-	audioData := generateAudio(uint32(sampleRate), toneType, int16(numberOfChannels))
+	audioData := generateAudio(uint32(sampleRate), int16(numberOfChannels))
 
 	//Create wav file
 	newWav := formats.WAVE{
@@ -52,53 +54,72 @@ func createWavFile(filename string, toneType string) {
 	newWav.SaveFile(filename)
 }
 
-func generateAudio(sampleRate uint32, toneType string, numChannels int16) []byte {
+func generateAudio(sampleRate uint32, numChannels int16) []byte {
 	fmt.Println("Generating audio")
 	var data []byte
 
-	track := Track{Tempo: 120, NoteList: []TrackValue{
-		{Note: "F4", Duration: 3, Velocity: 5},
-		{Note: "A4", Duration: 3, Velocity: 4},
-		{Note: "C5", Duration: 2, Velocity: 3},
-		{Note: "F4", Duration: 3, Velocity: 5},
-		{Note: "A4", Duration: 3, Velocity: 6},
-		{Note: "D5", Duration: 2, Velocity: 7},
-	}}
+	//Generate random note list
+	var noise = fastnoise.New[float32]()
+	noise.NoiseType(fastnoise.Perlin)
+	noise.Frequency = 0.15
+	noise.Seed = rand.Int()
 
-	bps := float64(track.Tempo) / SECONDS_PER_MINUTE
+	track := Track{Instrument: Instrument{Name: "My Instrument", Fn: SineGenerator}, NoteList: []TrackValue{}}
+	newScore := Score{Tempo: 120, Tracks: []Track{track}}
 
+	for x := 0; x < 10; x++ {
+		value := 0.5 * (noise.Noise2D(x, 0) + 1.0)
+
+		noteValue := int16(value * 140)
+
+		durationValue := int8(reMap(0.0, 1.0, 2.0, 6.0, float64(noise.Noise2D(x, 1))))
+		//durationValue := int8(0.5 * (noise.Noise2D(x,1) + 1.0) * 8);
+
+		dynamicValue := int8(reMap(0.0, 1.0, 4.0, 7.0, float64(noise.Noise2D(x, 2))))
+		//dynamicValue := int8(0.5 * (noise.Noise2D(x,2) + 1.0) * 8)
+
+		track.NoteList = append(track.NoteList, TrackValue{Note: noteMap[noteValue], Duration: durationValue, Velocity: dynamicValue})
+	}
+
+	//Test Track list
+	// track := Track{Tempo: 120, NoteList: []TrackValue{
+	// 	{Note: "F4", Duration: 3, Velocity: 5},
+	// 	{Note: "A4", Duration: 3, Velocity: 4},
+	// 	{Note: "C5", Duration: 2, Velocity: 3},
+	// 	{Note: "F4", Duration: 3, Velocity: 5},
+	// 	{Note: "A4", Duration: 3, Velocity: 6},
+	// 	{Note: "D5", Duration: 2, Velocity: 7},
+	// }}
+
+	bps := float64(newScore.Tempo) / SECONDS_PER_MINUTE
+
+	//For each note in the track list
 	for i := 0; i < len(track.NoteList); i++ {
 		value := track.NoteList[i]
 		note := notes[value.Note]
 
 		duration := float64(sampleRate) * (bps * noteDuration[value.Duration])
 
-		desired_scale := getDecibelScale(noteVelocity[value.Velocity])
+		velocity := getDecibelScale(noteVelocity[value.Velocity])
+
+		params := SoundParams{Time: 0, SampleRate: float64(sampleRate), Velocity: velocity, Frequency: note.Frequency}
 
 		for s := 0; s < int(duration); s++ {
 			var sample float64
-			switch toneType {
-			case "saw":
-				sample = getSawSample(float64(s), float64(sampleRate), note.Frequency)
-			case "square":
-				sample = getSquareSample(float64(s), float64(sampleRate), note.Frequency)
-			default:
-				sample = getSineSample(float64(s), float64(sampleRate), note.Frequency, desired_scale)
-			}
+			params.Time = float64(s)
+			sample = track.Instrument.Fn(params)
+
+			b := make([]byte, 2)
+			binary.LittleEndian.PutUint16(b, uint16(sample))
 
 			if numChannels == 1 {
-				b := make([]byte, 2)
-				binary.LittleEndian.PutUint16(b, uint16(sample))
 				data = append(data, b...)
 			}
 
 			if numChannels == 2 {
-				b := make([]byte, 2)
-				binary.LittleEndian.PutUint16(b, uint16(sample))
 				data = append(data, b...)
 				data = append(data, b...)
 			}
-			
 		}
 	}
 
@@ -107,4 +128,8 @@ func generateAudio(sampleRate uint32, toneType string, numChannels int16) []byte
 
 func getDecibelScale(db float64) float64 {
 	return math.Pow(10.0, db/20.0)
+}
+
+func reMap(a float64, b float64, c float64, d float64, n float64) float64 {
+	return c + (((d - c) / (b - a)) * (n - a))
 }

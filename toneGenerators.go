@@ -4,16 +4,16 @@ import (
 	"math"
 )
 
-func getSineSample(t float64, sampleRate float64, frequency float64, scale float64) float64 {
-	return scale * math.Sin(2*math.Pi*t/(sampleRate/frequency)) * 32767
+func SawGenerator(p SoundParams) float64 {
+	return p.Velocity * ((2*math.Mod(p.Time, (p.SampleRate/p.Frequency))/(p.SampleRate/p.Frequency) - 1) * 32767)
 }
 
-func getSawSample(t float64, sampleRate float64, frequency float64) float64 {
-	return ((2*math.Mod(t, (sampleRate/frequency))/(sampleRate/frequency) - 1) * 32767)
+func SineGenerator(p SoundParams) float64 {
+	return p.Velocity * math.Sin(2*math.Pi*p.Time/(p.SampleRate/p.Frequency)) * 32767
 }
 
-func getSquareSample(t float64, sampleRate float64, frequency float64) float64 {
-	val := math.Sin(2*math.Pi*t/(sampleRate/frequency)) * 32767
+func SquareGenerator(p SoundParams) float64 {
+	val := p.Velocity * math.Sin(2*math.Pi*p.Time/(p.SampleRate/p.Frequency)) * 32767
 	if val > 0.0 {
 		val = 32767
 	}

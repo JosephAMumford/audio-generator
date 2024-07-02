@@ -53,6 +53,12 @@ type WAVE struct {
 
 func (w *WAVE) SaveFile(filename string) {
 	fmt.Printf("Saving %s\n", filename)
+	
+	err := os.MkdirAll("exports", 0755)
+
+	//err := os.Mkdir("exports", 0755)
+	check(err)
+
 	f, err := os.Create(filename)
 	check(err)
 

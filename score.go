@@ -1,5 +1,10 @@
 package main
 
+type Score struct {
+	Tempo  int8
+	Tracks []Track
+}
+
 type TrackValue struct {
 	Note     string
 	Duration int8
@@ -7,6 +12,6 @@ type TrackValue struct {
 }
 
 type Track struct {
-	Tempo    int
-	NoteList []TrackValue
+	Instrument Instrument
+	NoteList   []TrackValue
 }
