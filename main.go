@@ -23,7 +23,7 @@ const (
 
 func main() {
 	//readWavFileData("sine.wav")
-	createWavFile("exports/square1.wav")
+	createWavFile("exports/single1.wav")
 }
 
 func readWavFileData(filename string) {
@@ -65,29 +65,55 @@ func generateAudio(sampleRate uint32, numChannels int16) []byte {
 	fmt.Println("Generating audio")
 	var data []byte
 
-	track := Track{Instrument: Instrument{Name: "Saw Instrument", Fn: SquareGenerator}, NoteList: []TrackValue{}}
-	track2 := Track{Instrument: Instrument{Name: "Sine Instrument", Fn: SineGenerator}, NoteList: []TrackValue{}}
+	track := Track{
+		Instrument: Instrument{
+			Name: "Square Instrument",
+			Fn:   SquareGenerator,
+			Envelope: EnvelopeParams{
+				Attack:  0.2,
+				Hold:    0.2,
+				Decay:   0.2,
+				Sustain: 0.5,
+				Release: 0.0,
+			},
+		},
+		NoteList: []TrackValue{},
+	}
+	track2 := Track{
+		Instrument: Instrument{
+			Name: "Sine Instrument",
+			Fn:   SineGenerator,
+			Envelope: EnvelopeParams{
+				Attack:  0.1,
+				Hold:    0.1,
+				Decay:   0.1,
+				Sustain: 0.5,
+				Release: 0.0,
+			},
+		},
+		NoteList: []TrackValue{},
+	}
 
 	newScore := Score{Tempo: 120, Tracks: []Track{track, track2}}
 
-	getRandomNotes(&track)
-	getRandomNotes(&track2)
+	//getRandomNotes(&track)
+	//getRandomNotes(&track2)
 
 	//Test Track list
-	// track.NoteList = []TrackValue{
-	// 	{Note: "F5", Duration: 3, Velocity: 4},
-	// 	{Note: "A5", Duration: 3, Velocity: 4},
-	// 	{Note: "C6", Duration: 2, Velocity: 4},
-	// 	{Note: "F4", Duration: 3, Velocity: 4},
-	// 	{Note: "A4", Duration: 3, Velocity: 4},
-	// 	{Note: "D5", Duration: 2, Velocity: 4},
-	// }
+	track.NoteList = []TrackValue{
+		{Note: "F5", Duration: 3, Velocity: 4},
+		{Note: "A5", Duration: 3, Velocity: 4},
+		{Note: "C6", Duration: 2, Velocity: 4},
+		{Note: "F4", Duration: 3, Velocity: 4},
+		{Note: "A4", Duration: 3, Velocity: 4},
+		{Note: "D5", Duration: 2, Velocity: 4},
+	}
 
-	// track2.NoteList = []TrackValue{
-	// 	{Note: "F3", Duration: 2, Velocity: 4},
-	// 	{Note: "A3", Duration: 2, Velocity: 4},
-	// 	{Note: "C3", Duration: 1, Velocity: 4},
-	// }
+	track2.NoteList = []TrackValue{
+		{Note: "F3", Duration: 2, Velocity: 4},
+		{Note: "A3", Duration: 2, Velocity: 4},
+		{Note: "C3", Duration: 1, Velocity: 4},
+	}
 
 	bps := float64(newScore.Tempo) / SECONDS_PER_MINUTE
 
@@ -171,20 +197,68 @@ func getRandomNotes(track *Track) {
 
 // Samples stored as raw float64 values
 func generateRawWavformData(track *Track, bps float64, sampleRate float64, numChannels float64) {
+
+	
+
 	for i := 0; i < len(track.NoteList); i++ {
 		value := track.NoteList[i]
 		note := notes[value.Note]
 
-		duration := float64(sampleRate) * (bps * noteDuration[value.Duration])
+		duration := float64(sampleRate) * (bps*noteDuration[value.Duration] + track.Instrument.Envelope.Release)
 
 		velocity := getDecibelScale(noteVelocity[value.Velocity])
 
 		params := SoundParams{Time: 0, SampleRate: float64(sampleRate), Velocity: velocity, Frequency: note.Frequency}
 
+		sampleTime := 1.0 / sampleRate
+
+		state := "attack"
+		stateValue := 0.0
+		
 		for s := 0; s < int(duration); s++ {
 			var sample float64
 			params.Time = float64(s)
 			sample = track.Instrument.Fn(params)
+
+			if state == "attack" {
+				stateValue = (float64(s) * sampleTime) / track.Instrument.Envelope.Attack
+				sample *= stateValue
+
+				if sampleTime * float64(s) > track.Instrument.Envelope.Attack {
+					state = "hold"
+				}
+			}
+			if state == "hold" {
+				sample *= stateValue
+
+				if sampleTime * float64(s) > (track.Instrument.Envelope.Attack + track.Instrument.Envelope.Hold) {
+					state = "decay"
+					if stateValue > 1.0 {
+						stateValue = 1.0
+					}
+				}
+			}
+			if state == "decay" {
+				//Apply decay
+				triggerDuration := track.Instrument.Envelope.Attack + track.Instrument.Envelope.Hold + track.Instrument.Envelope.Decay
+				m := (track.Instrument.Envelope.Sustain - stateValue) / (triggerDuration - (track.Instrument.Envelope.Attack + track.Instrument.Envelope.Hold))
+				stateValue = m * ((sampleTime * float64(s)) - triggerDuration) + track.Instrument.Envelope.Sustain
+
+				sample *= stateValue
+
+				if sampleTime * float64(s) > (track.Instrument.Envelope.Attack + track.Instrument.Envelope.Hold + track.Instrument.Envelope.Decay) {
+					state = "sustain"
+				}
+			}
+			if state == "sustain" {
+				//Apply sustain
+				sample *= stateValue
+			}
+			if state == "release" {
+				//Apply release
+			}
+
+
 
 			if numChannels == 1 {
 				track.RawWavform = append(track.RawWavform, sample)
