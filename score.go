@@ -14,4 +14,9 @@ type TrackValue struct {
 type Track struct {
 	Instrument Instrument
 	NoteList   []TrackValue
+	Wavform    WavformData
+	RawWavform RawWavformData
 }
+
+type WavformData []byte
+type RawWavformData []float64
